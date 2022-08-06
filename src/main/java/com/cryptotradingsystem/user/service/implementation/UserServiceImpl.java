@@ -95,7 +95,25 @@ public class UserServiceImpl implements UserService{
 
         for(int i = 0; i < transactionList.size(); i++)
         {
-            calculateTransaction(transactionList.get(i), balance);
+            CryptoCurrency cryptoCurrency = null;
+
+            Optional<CryptoCurrency> cryptoCurrencyOptional = cryptoCurrenyRepository.findBySymbolIgnoreCase(transactionList.get(i).getSymbol());
+            if (cryptoCurrencyOptional.isPresent()) 
+            {
+                cryptoCurrency = cryptoCurrencyOptional.get();
+                if(transactionList.get(i).getOrderType().equals(OrderType.BUY))
+                {
+                    BigDecimal difference = transactionList.get(i).getPrice().subtract(cryptoCurrency.getAskPrice());
+                    BigDecimal profitLoss = difference.multiply(transactionList.get(i).getAmount());
+                    balance = balance.subtract(profitLoss);
+                }
+                if(transactionList.get(i).getOrderType().equals(OrderType.SELL))
+                {
+                    BigDecimal difference = transactionList.get(i).getPrice().subtract(cryptoCurrency.getBidPrice());
+                    BigDecimal profitLoss = difference.multiply(transactionList.get(i).getAmount());
+                    balance = balance.add(profitLoss);
+                }
+            }        
         }
         
         return WalletDTO.builder()
@@ -108,26 +126,20 @@ public class UserServiceImpl implements UserService{
 
     @Override
     @Transactional(readOnly = true)
-    public BigDecimal calculateTransaction(Transaction transaction, BigDecimal balance)
+    public BigDecimal calculateTransaction(Transaction transaction, BigDecimal balance, BigDecimal closePrice)
     {
-        CryptoCurrency cryptoCurrency = null;
-
-        Optional<CryptoCurrency> cryptoCurrencyOptional = cryptoCurrenyRepository.findBySymbolIgnoreCase(transaction.getSymbol());
-        if (cryptoCurrencyOptional.isPresent()) 
+        
+        if(transaction.getOrderType().equals(OrderType.BUY))
         {
-            cryptoCurrency = cryptoCurrencyOptional.get();
-            if(transaction.getOrderType().equals(OrderType.BUY))
-            {
-                BigDecimal difference = transaction.getPrice().subtract(cryptoCurrency.getAskPrice());
-                BigDecimal profitLoss = difference.multiply(transaction.getAmount());
-                balance = balance.subtract(profitLoss);
-            }
-            if(transaction.getOrderType().equals(OrderType.SELL))
-            {
-                BigDecimal difference = transaction.getPrice().subtract(cryptoCurrency.getBidPrice());
-                BigDecimal profitLoss = difference.multiply(transaction.getAmount());
-                balance = balance.add(profitLoss);
-            }
+            BigDecimal difference = transaction.getPrice().subtract(closePrice);
+            BigDecimal profitLoss = difference.multiply(transaction.getAmount());
+            balance = balance.subtract(profitLoss);
+        }
+        if(transaction.getOrderType().equals(OrderType.SELL))
+        {
+            BigDecimal difference = transaction.getPrice().subtract(closePrice);
+            BigDecimal profitLoss = difference.multiply(transaction.getAmount());
+            balance = balance.add(profitLoss);
         }
 
         return balance;

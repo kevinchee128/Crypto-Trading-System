@@ -97,7 +97,7 @@ public class TradeServiceImpl implements TradeService{
                                 .build();
         }
 
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order Price is too low");
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Order Price");
     }
 
     @Override
@@ -147,7 +147,7 @@ public class TradeServiceImpl implements TradeService{
 
         if(transactionResult != null)
         {
-            BigDecimal balance = userService.calculateTransaction(transaction, wallet.getBalance());
+            BigDecimal balance = userService.calculateTransaction(transaction, wallet.getBalance(), closeOrderRequest.getPrice());
 
             walletRepository.save(Wallet.builder()
                                         .id(wallet.getId())
