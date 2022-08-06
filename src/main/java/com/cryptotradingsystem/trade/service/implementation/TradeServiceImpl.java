@@ -130,24 +130,47 @@ public class TradeServiceImpl implements TradeService{
 
         Transaction transactionResult = null;
         Wallet wallet = walletOptional.get();
+        BigDecimal amount = transaction.getAmount().subtract(closeOrderRequest.getAmount());
 
         if(closeOrderRequest.getOrderType().equals(transaction.getOrderType())
             && crypto.getAskPrice().compareTo(closeOrderRequest.getPrice()) >= 0)
         {
-            transaction.setStatus(Status.CLOSE);
+            if(amount.compareTo(BigDecimal.ZERO) < 0)
+            {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is higher then the Order Amount");
+            }
+            if(amount.compareTo(BigDecimal.ZERO) == 0)
+            {
+                transaction.setStatus(Status.CLOSE);
+            }
+            if(amount.compareTo(BigDecimal.ZERO) > 0)
+            {
+                transaction.setAmount(amount);
+            }
             transactionResult = transactionRepository.save(transaction);
         }
 
         if(closeOrderRequest.getOrderType().equals(transaction.getOrderType())
             && crypto.getBidPrice().compareTo(closeOrderRequest.getPrice()) <= 0)
         {
-            transaction.setStatus(Status.CLOSE);
+            if(amount.compareTo(BigDecimal.ZERO) < 0)
+            {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is higher then the Order Amount");
+            }
+            if(amount.compareTo(BigDecimal.ZERO) == 0)
+            {
+                transaction.setStatus(Status.CLOSE);
+            }
+            if(amount.compareTo(BigDecimal.ZERO) > 0)
+            {
+                transaction.setAmount(amount);
+            }
             transactionResult = transactionRepository.save(transaction);
         }
 
         if(transactionResult != null)
         {
-            BigDecimal balance = userService.calculateTransaction(transaction, wallet.getBalance(), closeOrderRequest.getPrice());
+            BigDecimal balance = userService.calculateTransaction(transactionResult, wallet.getBalance(), closeOrderRequest.getPrice());
 
             walletRepository.save(Wallet.builder()
                                         .id(wallet.getId())
