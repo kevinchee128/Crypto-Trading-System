@@ -1,6 +1,4 @@
-package com.cryptotradingsystem.user.dto;
-
-import java.math.BigDecimal;
+package com.cryptotradingsystem.trade.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,9 +13,7 @@ import lombok.ToString;
 @Setter
 @ToString
 @Builder
-public class WalletDTO {
+public class OrderDTO {
     
     private Long id;
-    private String currency;
-    private BigDecimal balance;
 }

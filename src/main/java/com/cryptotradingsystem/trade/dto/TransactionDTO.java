@@ -3,6 +3,9 @@ package com.cryptotradingsystem.trade.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.cryptotradingsystem.common.Constants.OrderType;
+import com.cryptotradingsystem.common.Constants.Status;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,7 +25,8 @@ public class TransactionDTO {
     private Long userId;
     private String symbol;
     private BigDecimal price;
-    private String orderType;
+    private OrderType orderType;
     private LocalDateTime dateTime;
-    private String status;
+    private Status status;
+    private BigDecimal amount;
 }

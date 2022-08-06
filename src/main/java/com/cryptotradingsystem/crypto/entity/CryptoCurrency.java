@@ -29,6 +29,7 @@ public class CryptoCurrency {
     private Long id;
     
     private String symbol;
+    private String currency;
     private BigDecimal askPrice;
     private BigDecimal bidPrice;
 

@@ -10,10 +10,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.cryptotradingsystem.common.Constants.Status;
 import com.cryptotradingsystem.trade.dto.TransactionDTO;
 import com.cryptotradingsystem.user.dto.WalletDTO;
 import com.cryptotradingsystem.user.service.UserService;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 @RestController
 @RequestMapping("/v1/user")
 public class UserController {
@@ -22,16 +26,18 @@ public class UserController {
     UserService userService;
     
     @GetMapping("/balance")
-    public ResponseEntity<Object> getWalletBalance(@RequestParam(required = true) Long userId){
-        
+    public ResponseEntity<List<WalletDTO>> getWalletBalance(@RequestParam(required = true) Long userId) 
+    {
+        log.info("API Called: getWalletBalance");
         List<WalletDTO> result = userService.getWalletBalance(userId);
 
         return new ResponseEntity<>(result, HttpStatus.OK);
     }
 
     @GetMapping("/history")
-    public ResponseEntity<Object> getTradingHistory(@RequestParam(required = true) Long userId, @RequestParam(required = true) String status) {
-
+    public ResponseEntity<List<TransactionDTO>> getTradingHistory(@RequestParam(required = true) Long userId, @RequestParam(required = true) Status status) 
+    {
+        log.info("API Called: getTradingHistory");
         List<TransactionDTO> result = userService.getTradingHistory(userId, status);
 
         return new ResponseEntity<>(result, HttpStatus.OK);

@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.cryptotradingsystem.crypto.dto.CryptoCurrencyDTO;
 import com.cryptotradingsystem.crypto.service.CryptoService;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 @RestController
 @RequestMapping("/v1/price")
 public class CryptoController {
@@ -23,6 +26,7 @@ public class CryptoController {
     @GetMapping
     public ResponseEntity<List<CryptoCurrencyDTO>> getBestAggregatedPrice()
     {
+        log.info("API Called: getBestAggregatedPrice");
         List<CryptoCurrencyDTO> result = cryptoService.getAllPrice();
 
         return new ResponseEntity<>(result, HttpStatus.OK);
@@ -31,17 +35,8 @@ public class CryptoController {
     @GetMapping("/{symbol}")
     public ResponseEntity<CryptoCurrencyDTO> getPriceBySymbol(@PathVariable String symbol) 
     {
-        if(symbol.isEmpty() || symbol == null)
-        {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
-
+        log.info("API Called: getPriceBySymbol");
         CryptoCurrencyDTO result = cryptoService.getPriceBySymbol(symbol);
-
-        if(result == null)
-        {
-            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
-        }
 
         return new ResponseEntity<>(result, HttpStatus.OK);
     }

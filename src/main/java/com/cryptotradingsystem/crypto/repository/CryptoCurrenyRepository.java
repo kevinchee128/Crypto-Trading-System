@@ -9,7 +9,7 @@ import com.cryptotradingsystem.crypto.entity.CryptoCurrency;
 
 public interface CryptoCurrenyRepository extends CrudRepository<CryptoCurrency, Long>{
     
-    Optional<CryptoCurrency> findBySymbol(String symbol);
+    Optional<CryptoCurrency> findBySymbolIgnoreCase(String symbol);
 
     List<CryptoCurrency> findAll();
 }

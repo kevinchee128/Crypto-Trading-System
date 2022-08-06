@@ -6,6 +6,9 @@ import org.springframework.stereotype.Component;
 
 import com.cryptotradingsystem.crypto.service.SchedulerService;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 @Component
 public class CryptoScheduler {
     
@@ -15,6 +18,7 @@ public class CryptoScheduler {
     @Scheduled(fixedRate = 10000)
     public void getCryptoSchedulerPrice()
     {
+        log.info("Retrieve Latest Price");
         schedulerService.getLatestPrice();
     }
 }

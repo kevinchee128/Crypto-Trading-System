@@ -32,7 +32,7 @@ public class SchedulerService {
 	@Value("${server.houbi.url}")
 	private String houbiUrl;
 
-	@Value("${server.crypto}")
+	@Value("${supported.crypto}")
 	private String[] supportedCrypto;
     
 	@Transactional
@@ -72,15 +72,30 @@ public class SchedulerService {
 				}
 			});
 
-		} 
-		catch(Exception e) {
-			log.info("Error occured", e);
+		} catch(Exception e) {
+			log.error("Error occured", e);
 		}
+
+	}
+
+	private void comparePrice(BinanceResponse binanceCrpytoData, HoubiResponse houbiCrpytoData)
+	{
+		BigDecimal askPrice = (binanceCrpytoData.getAskPrice().compareTo(houbiCrpytoData.getAsk()) < 0) ? binanceCrpytoData.getAskPrice() : houbiCrpytoData.getAsk();
+		BigDecimal bidPrice = (binanceCrpytoData.getBidPrice().compareTo(houbiCrpytoData.getBid()) > 0) ? binanceCrpytoData.getBidPrice() : houbiCrpytoData.getBid();
+
+		CryptoCurrency currency = CryptoCurrency.builder()
+			.symbol(binanceCrpytoData.getSymbol())
+			.askPrice(askPrice)
+			.bidPrice(bidPrice)
+			.currency(getCurrencyBySymbol(binanceCrpytoData.getSymbol()))
+			.build();
+
+		storePrice(currency);
 	}
 
 	private void storePrice(CryptoCurrency cryptoCurrency)
 	{
-		Optional<CryptoCurrency> cryptoCurrencyDB = cryptoCurrenyRepository.findBySymbol(cryptoCurrency.getSymbol());
+		Optional<CryptoCurrency> cryptoCurrencyDB = cryptoCurrenyRepository.findBySymbolIgnoreCase(cryptoCurrency.getSymbol());
 		if(cryptoCurrencyDB.isPresent())
 		{
 			CryptoCurrency cryptoCurrencyToSave = cryptoCurrencyDB.get();
@@ -94,18 +109,16 @@ public class SchedulerService {
 		}
 	}
 
-	private void comparePrice(BinanceResponse binanceCrpytoData, HoubiResponse houbiCrpytoData)
+	private String getCurrencyBySymbol(String symbol)
 	{
-		BigDecimal askPrice = (binanceCrpytoData.getAskPrice().compareTo(houbiCrpytoData.getAsk()) < 0) ? binanceCrpytoData.getAskPrice() : houbiCrpytoData.getAsk();
-		BigDecimal bidPrice = (binanceCrpytoData.getBidPrice().compareTo(houbiCrpytoData.getBid()) > 0) ? binanceCrpytoData.getBidPrice() : houbiCrpytoData.getBid();
+		String value = "";
 
-		CryptoCurrency currency = CryptoCurrency.builder()
-			.symbol(binanceCrpytoData.getSymbol())
-			.askPrice(askPrice)
-			.bidPrice(bidPrice)
-			.build();
+		if(symbol.equalsIgnoreCase("ETHUSDT") || symbol.equalsIgnoreCase("BTCUSDT"))
+		{
+			value = "USDT";
+		}
 
-		storePrice(currency);
+		return value;
 	}
 }
 

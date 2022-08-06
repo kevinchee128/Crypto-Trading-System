@@ -18,6 +18,7 @@ import lombok.ToString;
 public class CryptoCurrencyDTO {
     
     private String symbol;
+    private String currency;
     private BigDecimal askPrice;
     private BigDecimal bidPrice;
 }
