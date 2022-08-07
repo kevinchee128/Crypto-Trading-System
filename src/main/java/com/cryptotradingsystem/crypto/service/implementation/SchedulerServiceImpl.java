@@ -1,6 +1,7 @@
 package com.cryptotradingsystem.crypto.service.implementation;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -11,12 +12,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import com.cryptotradingsystem.common.Constants.Status;
 import com.cryptotradingsystem.crypto.entity.CryptoCurrency;
 import com.cryptotradingsystem.crypto.repository.CryptoCurrenyRepository;
 import com.cryptotradingsystem.crypto.response.BinanceResponse;
 import com.cryptotradingsystem.crypto.response.HoubiResponse;
 import com.cryptotradingsystem.crypto.response.HoubiResponseList;
 import com.cryptotradingsystem.crypto.service.SchedulerService;
+import com.cryptotradingsystem.trade.repository.TransactionRepository;
+import com.cryptotradingsystem.user.dto.WalletDTO;
+import com.cryptotradingsystem.user.entity.User;
+import com.cryptotradingsystem.user.repository.UserRepository;
+import com.cryptotradingsystem.user.repository.WalletRepository;
+import com.cryptotradingsystem.user.service.UserService;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -27,6 +35,18 @@ public class SchedulerServiceImpl implements SchedulerService{
 	@Autowired
 	CryptoCurrenyRepository cryptoCurrenyRepository;
 
+	@Autowired
+	UserRepository userRepository;
+
+	@Autowired
+	TransactionRepository transactionRepository;
+
+	@Autowired
+	WalletRepository walletRepository;
+
+	@Autowired
+	UserService userService;
+
     @Value("${server.binance.url}")
 	private String binanceUrl;
 
@@ -35,7 +55,7 @@ public class SchedulerServiceImpl implements SchedulerService{
 
 	@Value("${supported.crypto}")
 	private String[] supportedCrypto;
-    
+
 	@Transactional
 	public void getLatestPrice()
 	{
@@ -79,6 +99,24 @@ public class SchedulerServiceImpl implements SchedulerService{
 
 	}
 
+	private void checkAccountBalance(String currency)
+	{
+		List<User> userList = new ArrayList<>();
+		Iterable<User> userIterable = userRepository.findAll();
+		userIterable.forEach(userList::add);
+
+		for(int i = 0; i < userList.size(); i++)
+		{
+			WalletDTO result = userService.calculateWalletBalance(userList.get(i).getId(), currency, Status.OPEN);
+			if(result.getBalance().compareTo(BigDecimal.ZERO) < 0 )
+			{
+				log.info("Force Closing Open Transactions");
+				transactionRepository.updateStatusByUserIdAndCurrency(userList.get(i).getId(), currency);
+				walletRepository.updateBalanceByUserIdAndCurrency(userList.get(i).getId(), currency);
+			}
+		}
+	}
+
 	private void comparePrice(BinanceResponse binanceCrpytoData, HoubiResponse houbiCrpytoData)
 	{
 		BigDecimal askPrice = (binanceCrpytoData.getAskPrice().compareTo(houbiCrpytoData.getAsk()) < 0) ? binanceCrpytoData.getAskPrice() : houbiCrpytoData.getAsk();
@@ -90,6 +128,8 @@ public class SchedulerServiceImpl implements SchedulerService{
 			.bidPrice(bidPrice)
 			.currency(getCurrencyBySymbol(binanceCrpytoData.getSymbol()))
 			.build();
+
+		checkAccountBalance(crypto.getCurrency());
 
 		storePrice(crypto);
 	}
