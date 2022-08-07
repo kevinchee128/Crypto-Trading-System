@@ -11,4 +11,6 @@ public class Constants {
         OPEN,
         CLOSE
     }
+
+    public static final String V1 = "/v1";
 }

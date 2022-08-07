@@ -13,15 +13,13 @@ import org.springframework.web.server.ResponseStatusException;
 import com.cryptotradingsystem.common.Constants.OrderType;
 import com.cryptotradingsystem.common.Constants.Status;
 import com.cryptotradingsystem.crypto.entity.CryptoCurrency;
-import com.cryptotradingsystem.crypto.repository.CryptoCurrenyRepository;
+import com.cryptotradingsystem.crypto.repository.CryptoCurrencyRepository;
 import com.cryptotradingsystem.trade.dto.OrderDTO;
 import com.cryptotradingsystem.trade.entity.Transaction;
 import com.cryptotradingsystem.trade.repository.TransactionRepository;
 import com.cryptotradingsystem.trade.request.CloseOrderRequest;
 import com.cryptotradingsystem.trade.request.OrderRequest;
 import com.cryptotradingsystem.trade.service.TradeService;
-import com.cryptotradingsystem.user.dto.WalletDTO;
-import com.cryptotradingsystem.user.entity.Wallet;
 import com.cryptotradingsystem.user.repository.WalletRepository;
 import com.cryptotradingsystem.user.service.UserService;
 
@@ -29,7 +27,7 @@ import com.cryptotradingsystem.user.service.UserService;
 public class TradeServiceImpl implements TradeService{
 
     @Autowired
-    CryptoCurrenyRepository cryptoCurrenyRepository;
+    CryptoCurrencyRepository cryptoCurrencyRepository;
 
     @Autowired
     WalletRepository walletRepository;
@@ -44,7 +42,7 @@ public class TradeServiceImpl implements TradeService{
     @Transactional
     public OrderDTO placeOrder(OrderRequest orderRequest) 
     {
-        Optional<CryptoCurrency> cryptoOptional = cryptoCurrenyRepository.findBySymbolIgnoreCase(orderRequest.getSymbol());
+        Optional<CryptoCurrency> cryptoOptional = cryptoCurrencyRepository.findBySymbolIgnoreCase(orderRequest.getSymbol());
 
         if(!cryptoOptional.isPresent())
         {
@@ -53,39 +51,21 @@ public class TradeServiceImpl implements TradeService{
 
         Long orderId = null;
         CryptoCurrency crypto = cryptoOptional.get();
-        WalletDTO wallet = userService.calculateWalletBalance(orderRequest.getUserId(), crypto.getCurrency(), Status.OPEN);
+        BigDecimal balance = userService.calculateWalletBalance(orderRequest.getUserId(), crypto.getCurrency());
 
-        if(orderRequest.getOrderType().equals(OrderType.BUY)
-            && crypto.getAskPrice().compareTo(orderRequest.getPrice()) <= 0
-                && wallet.getBalance().compareTo(BigDecimal.ZERO) > 0)
+        if(balance.compareTo(BigDecimal.ZERO) <= 0)
         {
-            Transaction result = transactionRepository.save(Transaction.builder()
-                                            .userId(orderRequest.getUserId())
-                                            .symbol(orderRequest.getSymbol())
-                                            .price(orderRequest.getPrice())
-                                            .orderType(orderRequest.getOrderType())
-                                            .dateTime(LocalDateTime.now())
-                                            .status(Status.OPEN)
-                                            .amount(orderRequest.getAmount())
-                                            .currency(crypto.getCurrency())
-                                            .build());
-
-            orderId = result.getId();
-            return OrderDTO.builder()
-                                .id(orderId)
-                                .build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient wallet balance");
         }
-
-        if(orderRequest.getOrderType().equals(OrderType.SELL)
-            && crypto.getBidPrice().compareTo(orderRequest.getPrice()) >= 0
-                &&wallet.getBalance().compareTo(BigDecimal.ZERO) > 0)
+            
+        if(canPlaceOrder(orderRequest.getOrderType(), orderRequest.getPrice(), crypto))
         {
             Transaction result = transactionRepository.save(Transaction.builder()
                                             .userId(orderRequest.getUserId())
                                             .symbol(orderRequest.getSymbol())
-                                            .price(orderRequest.getPrice())
+                                            .openPrice(orderRequest.getOrderType().equals(OrderType.BUY) ? crypto.getAskPrice() : crypto.getBidPrice())
                                             .orderType(orderRequest.getOrderType())
-                                            .dateTime(LocalDateTime.now())
+                                            .openDateTime(LocalDateTime.now())
                                             .status(Status.OPEN)
                                             .amount(orderRequest.getAmount())
                                             .currency(crypto.getCurrency())
@@ -104,15 +84,15 @@ public class TradeServiceImpl implements TradeService{
     @Transactional
     public void closeOrder(CloseOrderRequest closeOrderRequest) 
     {
-        Optional<Transaction> transactionOptional = transactionRepository.findByIdAndStatus(closeOrderRequest.getOrderId(), Status.OPEN);
+        Optional<Transaction> transactionOptional = transactionRepository.findByIdAndUserIdAndStatus(closeOrderRequest.getOrderId(), closeOrderRequest.getUserId(), Status.OPEN);
 
         if(!transactionOptional.isPresent()) 
         {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unable to find Open Order with the Order Id");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unable to find Open Order with the Order Id for the user");
         }
 
         Transaction transaction = transactionOptional.get();
-        Optional<CryptoCurrency> cryptoOptional = cryptoCurrenyRepository.findBySymbolIgnoreCase(closeOrderRequest.getSymbol());
+        Optional<CryptoCurrency> cryptoOptional = cryptoCurrencyRepository.findBySymbolIgnoreCase(transaction.getSymbol());
 
         if(!cryptoOptional.isPresent())
         {
@@ -121,68 +101,45 @@ public class TradeServiceImpl implements TradeService{
 
         CryptoCurrency crypto = cryptoOptional.get();
 
-        Optional<Wallet> walletOptional = walletRepository.findByUserIdAndCurrency(closeOrderRequest.getUserId(), crypto.getCurrency());
-
-        if(!walletOptional.isPresent())
+        if(canCloseOrder(transaction.getOrderType(), closeOrderRequest.getPrice(), crypto))
         {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unable to find Wallet with User Id and Currency");
-        }
-
-        Transaction transactionResult = null;
-        Wallet wallet = walletOptional.get();
-        BigDecimal amount = transaction.getAmount().subtract(closeOrderRequest.getAmount());
-
-        if(closeOrderRequest.getOrderType().equals(transaction.getOrderType())
-            && crypto.getAskPrice().compareTo(closeOrderRequest.getPrice()) >= 0)
-        {
-            if(amount.compareTo(BigDecimal.ZERO) < 0)
-            {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is higher then the Order Amount");
-            }
-            if(amount.compareTo(BigDecimal.ZERO) == 0)
-            {
-                transaction.setStatus(Status.CLOSE);
-            }
-            if(amount.compareTo(BigDecimal.ZERO) > 0)
-            {
-                transaction.setAmount(amount);
-            }
-            transactionResult = transactionRepository.save(transaction);
-        }
-
-        if(closeOrderRequest.getOrderType().equals(transaction.getOrderType())
-            && crypto.getBidPrice().compareTo(closeOrderRequest.getPrice()) <= 0)
-        {
-            if(amount.compareTo(BigDecimal.ZERO) < 0)
-            {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is higher then the Order Amount");
-            }
-            if(amount.compareTo(BigDecimal.ZERO) == 0)
-            {
-                transaction.setStatus(Status.CLOSE);
-            }
-            if(amount.compareTo(BigDecimal.ZERO) > 0)
-            {
-                transaction.setAmount(amount);
-            }
-            transactionResult = transactionRepository.save(transaction);
-        }
-
-        if(transactionResult != null)
-        {
-            BigDecimal balance = userService.calculateTransaction(transactionResult, wallet.getBalance(), closeOrderRequest.getPrice());
-
-            walletRepository.save(Wallet.builder()
-                                        .id(wallet.getId())
-                                        .userId(wallet.getUserId())
-                                        .currency(wallet.getCurrency())
-                                        .balance(balance)
-                                        .build());
+            transaction.setStatus(Status.CLOSE);
+            transaction.setClosePrice(transaction.getOrderType().equals(OrderType.BUY) ? crypto.getAskPrice() : crypto.getBidPrice());
+            transaction.setCloseDateTime(LocalDateTime.now());
+            Transaction transactionResult = transactionRepository.save(transaction);
+            userService.updateWallet(transaction.getUserId(), transactionResult);
         }
         else
         {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order Price is too low");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Order Price");
         }
     }
     
+    private boolean canPlaceOrder(OrderType orderType, BigDecimal requestPrice, CryptoCurrency crypto)
+    {
+        if(orderType.equals(OrderType.BUY))
+        {
+            return crypto.getAskPrice().compareTo(requestPrice) <= 0;
+        }
+        if(orderType.equals(OrderType.SELL))
+        {
+            return crypto.getBidPrice().compareTo(requestPrice) >= 0;
+        }
+
+        return false;
+    }
+
+    private boolean canCloseOrder(OrderType orderType, BigDecimal requestPrice, CryptoCurrency crypto)
+    {
+        if(orderType.equals(OrderType.BUY))
+        {
+            return crypto.getAskPrice().compareTo(requestPrice) >= 0;
+        }
+        if(orderType.equals(OrderType.SELL))
+        {
+            return crypto.getBidPrice().compareTo(requestPrice) <= 0;
+        }
+
+        return false;
+    }
 }

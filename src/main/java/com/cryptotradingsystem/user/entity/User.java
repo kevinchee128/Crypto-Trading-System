@@ -3,6 +3,7 @@ package com.cryptotradingsystem.user.entity;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
+import javax.validation.constraints.NotNull;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -23,6 +24,8 @@ public class User {
     @Id 
     private Long id;
     
+    @NotNull
     private String name;
+    @NotNull
     private String email;
 }

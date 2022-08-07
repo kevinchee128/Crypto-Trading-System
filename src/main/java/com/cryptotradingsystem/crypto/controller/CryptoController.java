@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.cryptotradingsystem.common.Constants;
 import com.cryptotradingsystem.crypto.dto.CryptoCurrencyDTO;
 import com.cryptotradingsystem.crypto.service.CryptoService;
 
@@ -17,7 +18,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @RestController
-@RequestMapping("/v1/price")
+@RequestMapping(Constants.V1 + "/price")
 public class CryptoController {
 
     @Autowired

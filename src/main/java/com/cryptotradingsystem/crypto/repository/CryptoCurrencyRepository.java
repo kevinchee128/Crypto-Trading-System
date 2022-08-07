@@ -1,15 +1,12 @@
 package com.cryptotradingsystem.crypto.repository;
 
-import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.cryptotradingsystem.crypto.entity.CryptoCurrency;
 
-public interface CryptoCurrenyRepository extends CrudRepository<CryptoCurrency, Long>{
+public interface CryptoCurrencyRepository extends JpaRepository<CryptoCurrency, Long>{
     
     Optional<CryptoCurrency> findBySymbolIgnoreCase(String symbol);
-
-    List<CryptoCurrency> findAll();
 }

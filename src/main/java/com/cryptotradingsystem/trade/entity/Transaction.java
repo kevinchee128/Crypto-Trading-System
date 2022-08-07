@@ -9,6 +9,7 @@ import javax.persistence.Enumerated;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.validation.constraints.NotNull;
 
 import com.cryptotradingsystem.common.Constants.OrderType;
 import com.cryptotradingsystem.common.Constants.Status;
@@ -34,15 +35,26 @@ public class Transaction {
     @GeneratedValue(strategy=GenerationType.IDENTITY)
     private Long id;
 
+    @NotNull
     private Long userId;
+    @NotNull
     private String symbol;
-    private BigDecimal price;
-    private LocalDateTime dateTime;
+    @NotNull
+    private BigDecimal openPrice;
+    @NotNull
+    private LocalDateTime openDateTime;
+    @NotNull
     private BigDecimal amount;
+    @NotNull
     private String currency;
-    
+
+    @NotNull
     @Enumerated(EnumType.STRING)
     private Status status;
+    @NotNull
     @Enumerated(EnumType.STRING)
     private OrderType orderType;
+
+    private BigDecimal closePrice;
+    private LocalDateTime closeDateTime;
 }

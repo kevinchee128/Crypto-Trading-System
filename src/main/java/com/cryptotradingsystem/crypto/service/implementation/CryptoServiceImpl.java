@@ -12,14 +12,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.cryptotradingsystem.crypto.dto.CryptoCurrencyDTO;
 import com.cryptotradingsystem.crypto.entity.CryptoCurrency;
-import com.cryptotradingsystem.crypto.repository.CryptoCurrenyRepository;
+import com.cryptotradingsystem.crypto.repository.CryptoCurrencyRepository;
 import com.cryptotradingsystem.crypto.service.CryptoService;
 
 @Service
 public class CryptoServiceImpl implements CryptoService {
 
     @Autowired
-    CryptoCurrenyRepository cryptoCurrencyRepository;
+    CryptoCurrencyRepository cryptoCurrencyRepository;
 
     @Override
     @Transactional(readOnly = true)

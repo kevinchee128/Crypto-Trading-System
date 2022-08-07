@@ -24,9 +24,12 @@ public class TransactionDTO {
     
     private Long userId;
     private String symbol;
-    private BigDecimal price;
+    private BigDecimal openPrice;
+    private BigDecimal closePrice;
     private OrderType orderType;
-    private LocalDateTime dateTime;
+    private LocalDateTime openDateTime;
+    private LocalDateTime closeDateTime;
     private Status status;
     private BigDecimal amount;
+    private Long orderId;
 }

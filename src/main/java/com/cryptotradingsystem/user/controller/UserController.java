@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.cryptotradingsystem.common.Constants;
 import com.cryptotradingsystem.common.Constants.Status;
 import com.cryptotradingsystem.trade.dto.TransactionDTO;
 import com.cryptotradingsystem.user.dto.WalletDTO;
@@ -19,7 +20,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @RestController
-@RequestMapping("/v1/user")
+@RequestMapping(Constants.V1 + "/user")
 public class UserController {
 
     @Autowired 

@@ -2,7 +2,9 @@ package com.cryptotradingsystem.user.service.implementation;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,12 +16,14 @@ import org.springframework.web.server.ResponseStatusException;
 import com.cryptotradingsystem.common.Constants.OrderType;
 import com.cryptotradingsystem.common.Constants.Status;
 import com.cryptotradingsystem.crypto.entity.CryptoCurrency;
-import com.cryptotradingsystem.crypto.repository.CryptoCurrenyRepository;
+import com.cryptotradingsystem.crypto.repository.CryptoCurrencyRepository;
 import com.cryptotradingsystem.trade.dto.TransactionDTO;
 import com.cryptotradingsystem.trade.entity.Transaction;
 import com.cryptotradingsystem.trade.repository.TransactionRepository;
 import com.cryptotradingsystem.user.dto.WalletDTO;
+import com.cryptotradingsystem.user.entity.User;
 import com.cryptotradingsystem.user.entity.Wallet;
+import com.cryptotradingsystem.user.repository.UserRepository;
 import com.cryptotradingsystem.user.repository.WalletRepository;
 import com.cryptotradingsystem.user.service.UserService;
 
@@ -27,19 +31,22 @@ import com.cryptotradingsystem.user.service.UserService;
 public class UserServiceImpl implements UserService{
 
     @Autowired
-    WalletRepository walleRepository;
+    WalletRepository walletRepository;
 
     @Autowired
     TransactionRepository transactionRepository;
 
     @Autowired 
-    CryptoCurrenyRepository cryptoCurrenyRepository;
+    CryptoCurrencyRepository cryptoCurrencyRepository;
+
+    @Autowired
+    UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
     public List<WalletDTO> getWalletBalance(Long userId) 
     {
-        List<Wallet> result = walleRepository.findByUserId(userId);
+        List<Wallet> result = walletRepository.findByUserId(userId);
 
         if(result.isEmpty())
         {
@@ -50,6 +57,7 @@ public class UserServiceImpl implements UserService{
                                             .id(w.getId())
                                             .currency(w.getCurrency())
                                             .balance(w.getBalance())
+                                            .currentBalance(calculateWalletBalance(w.getUserId(), w.getCurrency()))
                                             .build()).collect(Collectors.toList());
     }
 
@@ -57,31 +65,33 @@ public class UserServiceImpl implements UserService{
     @Transactional(readOnly = true)
     public List<TransactionDTO> getTradingHistory(Long userId, Status status) 
     {
+        Optional<User> user = userRepository.findById(userId);
 
-        List<Transaction> result = transactionRepository.findByUserIdAndStatusOrderByDateTimeDesc(userId, status);
-
-        if(result.isEmpty())
+        if(!user.isPresent())
         {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User does not have any Trading History with Status: " + status);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not Found");
         }
+
+        List<Transaction> result = transactionRepository.findByUserIdAndStatusOrderByOpenDateTimeDesc(userId, status);
 
         return result.stream().map(t -> TransactionDTO.builder()
                                             .userId(t.getId())
                                             .symbol(t.getSymbol())
-                                            .price(t.getPrice())
+                                            .openPrice(t.getOpenPrice())
+                                            .closePrice(t.getClosePrice())
                                             .orderType(t.getOrderType())
-                                            .dateTime(t.getDateTime())
+                                            .openDateTime(t.getOpenDateTime())
+                                            .closeDateTime(t.getCloseDateTime())
                                             .status(t.getStatus())
                                             .amount(t.getAmount())
+                                            .orderId(t.getId())
                                             .build()).collect(Collectors.toList());
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public WalletDTO calculateWalletBalance(Long userId, String currency, Status status) 
+    public BigDecimal calculateWalletBalance(Long userId, String currency) 
     {
-
-        Optional<Wallet> walletOptional = walleRepository.findByUserIdAndCurrency(userId, currency);
+        Optional<Wallet> walletOptional = walletRepository.findByUserIdAndCurrency(userId, currency);
 
         if(!walletOptional.isPresent())
         {
@@ -91,53 +101,62 @@ public class UserServiceImpl implements UserService{
         Wallet wallet = walletOptional.get();
         BigDecimal balance = wallet.getBalance();
 
-        List<Transaction> transactionList = transactionRepository.findByUserIdAndStatusAndCurrency(userId, status, currency);
+        List<Transaction> transactionList = transactionRepository.findByUserIdAndStatusAndCurrency(userId, Status.OPEN, currency);
+        List<CryptoCurrency> cryptoCurrencyList = cryptoCurrencyRepository.findAll();
+        Map<String, CryptoCurrency> cryptoCurrencyMap = cryptoCurrencyList.stream().collect(Collectors.toMap(CryptoCurrency::getSymbol, Function.identity()));
 
-        for(int i = 0; i < transactionList.size(); i++)
+        for(Transaction transaction: transactionList)
         {
-            CryptoCurrency cryptoCurrency = null;
-
-            Optional<CryptoCurrency> cryptoCurrencyOptional = cryptoCurrenyRepository.findBySymbolIgnoreCase(transactionList.get(i).getSymbol());
-            if (cryptoCurrencyOptional.isPresent()) 
+            if(!cryptoCurrencyMap.containsKey(transaction.getSymbol()))
             {
-                cryptoCurrency = cryptoCurrencyOptional.get();
-                if(transactionList.get(i).getOrderType().equals(OrderType.BUY))
-                {
-                    BigDecimal difference = transactionList.get(i).getPrice().subtract(cryptoCurrency.getAskPrice());
-                    BigDecimal profitLoss = difference.multiply(transactionList.get(i).getAmount());
-                    balance = balance.subtract(profitLoss);
-                }
-                if(transactionList.get(i).getOrderType().equals(OrderType.SELL))
-                {
-                    BigDecimal difference = transactionList.get(i).getPrice().subtract(cryptoCurrency.getBidPrice());
-                    BigDecimal profitLoss = difference.multiply(transactionList.get(i).getAmount());
-                    balance = balance.add(profitLoss);
-                }
-            }        
-        }
-        
-        return WalletDTO.builder()
-                    .id(wallet.getId())
-                    .balance(balance)
-                    .currency(currency)
-                    .build();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unable to find Symbol");
+            }
 
+            CryptoCurrency cryptoCurrency = cryptoCurrencyMap.get(transaction.getSymbol());
+
+            if(transaction.getOrderType().equals(OrderType.BUY))
+            {
+                BigDecimal profitLoss = (cryptoCurrency.getAskPrice().subtract(transaction.getOpenPrice())).multiply(transaction.getAmount());
+                balance = balance.add(profitLoss);
+            }
+            if(transaction.getOrderType().equals(OrderType.SELL))
+            {
+                BigDecimal profitLoss = (transaction.getOpenPrice().subtract(cryptoCurrency.getBidPrice())).multiply(transaction.getAmount());
+                balance = balance.add(profitLoss);
+            }
+        }
+
+        return balance;
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public BigDecimal calculateTransaction(Transaction transaction, BigDecimal balance, BigDecimal closePrice)
+    public void updateWallet(Long userId, Transaction transaction)
     {
-        
+        Optional<Wallet> walletOptional = walletRepository.findByUserIdAndCurrency(userId, transaction.getCurrency());
+
+        if(!walletOptional.isPresent())
+        {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Unable to find Wallet with User Id and Currency");
+        }
+
+        Wallet wallet = walletOptional.get();
+
+        BigDecimal balance = calculateTransaction(transaction, wallet.getBalance());
+        wallet.setBalance(balance);
+        walletRepository.save(wallet);
+    }
+
+    private BigDecimal calculateTransaction(Transaction transaction, BigDecimal balance)
+    {
         if(transaction.getOrderType().equals(OrderType.BUY))
         {
-            BigDecimal difference = transaction.getPrice().subtract(closePrice);
+            BigDecimal difference = transaction.getOpenPrice().subtract(transaction.getClosePrice());
             BigDecimal profitLoss = difference.multiply(transaction.getAmount());
             balance = balance.subtract(profitLoss);
         }
         if(transaction.getOrderType().equals(OrderType.SELL))
         {
-            BigDecimal difference = transaction.getPrice().subtract(closePrice);
+            BigDecimal difference = transaction.getOpenPrice().subtract(transaction.getClosePrice());
             BigDecimal profitLoss = difference.multiply(transaction.getAmount());
             balance = balance.add(profitLoss);
         }

@@ -1,10 +1,13 @@
 package com.cryptotradingsystem.crypto.service.implementation;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,16 +15,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import com.cryptotradingsystem.common.Constants.OrderType;
 import com.cryptotradingsystem.common.Constants.Status;
 import com.cryptotradingsystem.crypto.entity.CryptoCurrency;
-import com.cryptotradingsystem.crypto.repository.CryptoCurrenyRepository;
+import com.cryptotradingsystem.crypto.repository.CryptoCurrencyRepository;
 import com.cryptotradingsystem.crypto.response.BinanceResponse;
 import com.cryptotradingsystem.crypto.response.HoubiResponse;
 import com.cryptotradingsystem.crypto.response.HoubiResponseList;
 import com.cryptotradingsystem.crypto.service.SchedulerService;
+import com.cryptotradingsystem.trade.entity.Transaction;
 import com.cryptotradingsystem.trade.repository.TransactionRepository;
-import com.cryptotradingsystem.user.dto.WalletDTO;
 import com.cryptotradingsystem.user.entity.User;
+import com.cryptotradingsystem.user.entity.Wallet;
 import com.cryptotradingsystem.user.repository.UserRepository;
 import com.cryptotradingsystem.user.repository.WalletRepository;
 import com.cryptotradingsystem.user.service.UserService;
@@ -33,7 +38,7 @@ import lombok.extern.log4j.Log4j2;
 public class SchedulerServiceImpl implements SchedulerService{
 
 	@Autowired
-	CryptoCurrenyRepository cryptoCurrenyRepository;
+	CryptoCurrencyRepository cryptoCurrenyRepository;
 
 	@Autowired
 	UserRepository userRepository;
@@ -93,26 +98,47 @@ public class SchedulerServiceImpl implements SchedulerService{
 				}
 			});
 
-		} catch(Exception e) {
+			checkAccountBalance();
+		} 
+		catch(Exception e) 
+		{
 			log.error("Error occured", e);
 		}
 
 	}
 
-	private void checkAccountBalance(String currency)
+	private void checkAccountBalance()
 	{
-		List<User> userList = new ArrayList<>();
-		Iterable<User> userIterable = userRepository.findAll();
-		userIterable.forEach(userList::add);
+		LocalDateTime timeNow = LocalDateTime.now();
+		List<User> userList = userRepository.findAll();
+		List<CryptoCurrency> cryptoList = cryptoCurrenyRepository.findAll();
+		Map<String, CryptoCurrency> cryptoMap = cryptoList.stream().collect(Collectors.toMap(CryptoCurrency::getSymbol, Function.identity()));
 
-		for(int i = 0; i < userList.size(); i++)
+		for(User user : userList)
 		{
-			WalletDTO result = userService.calculateWalletBalance(userList.get(i).getId(), currency, Status.OPEN);
-			if(result.getBalance().compareTo(BigDecimal.ZERO) < 0 )
+			List<Wallet> walletList = walletRepository.findByUserId(user.getId());
+
+			for(Wallet wallet : walletList)
 			{
-				log.info("Force Closing Open Transactions");
-				transactionRepository.updateStatusByUserIdAndCurrency(userList.get(i).getId(), currency);
-				walletRepository.updateBalanceByUserIdAndCurrency(userList.get(i).getId(), currency);
+				BigDecimal balance = userService.calculateWalletBalance(user.getId(), wallet.getCurrency());
+
+				if(balance.compareTo(BigDecimal.ZERO) < 0 )
+				{
+					log.info("Force Closing Open Transactions");
+					List<Transaction> transactionList = transactionRepository.findByUserIdAndStatusAndCurrency(user.getId(), Status.OPEN, wallet.getCurrency());
+
+					for(Transaction transaction : transactionList)
+					{
+						BigDecimal closePrice = transaction.getOrderType().equals(OrderType.BUY) ? cryptoMap.get(transaction.getSymbol()).getAskPrice() : cryptoMap.get(transaction.getSymbol()).getBidPrice();
+
+						transaction.setStatus(Status.CLOSE);
+						transaction.setCloseDateTime(timeNow);
+						transaction.setClosePrice(closePrice);
+						transactionRepository.save(transaction);
+					}
+					
+					walletRepository.updateBalanceByUserIdAndCurrency(user.getId(), wallet.getCurrency());
+				}
 			}
 		}
 	}
@@ -128,8 +154,6 @@ public class SchedulerServiceImpl implements SchedulerService{
 			.bidPrice(bidPrice)
 			.currency(getCurrencyBySymbol(binanceCrpytoData.getSymbol()))
 			.build();
-
-		checkAccountBalance(crypto.getCurrency());
 
 		storePrice(crypto);
 	}

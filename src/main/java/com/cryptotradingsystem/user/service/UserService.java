@@ -14,9 +14,7 @@ public interface UserService {
 
     public List<TransactionDTO> getTradingHistory(Long userId, Status status);
 
-    public WalletDTO calculateWalletBalance(Long userId, String currency, Status status);
+    public BigDecimal calculateWalletBalance(Long userId, String currency);
 
-    public BigDecimal calculateTransaction(Transaction transaction, BigDecimal balance, BigDecimal closePrice);
-
-    
+    public void updateWallet(Long userId, Transaction transaction);
 }
